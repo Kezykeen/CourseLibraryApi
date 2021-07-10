@@ -1,11 +1,16 @@
-using CourseLibrary.API.DbContexts;
+using System;
+using CourseLibraryApi.DbContexts;
 using CourseLibraryApi.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Newtonsoft.Json.Serialization;
 
 namespace CourseLibraryApi
 {
@@ -23,7 +28,52 @@ namespace CourseLibraryApi
         {
             services.AddControllers(
                     setupAction => setupAction.ReturnHttpNotAcceptable = true)
-                .AddXmlDataContractSerializerFormatters();
+                .AddNewtonsoftJson(setupAction=> setupAction.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver())
+                .AddXmlDataContractSerializerFormatters()
+                .ConfigureApiBehaviorOptions(setupAction =>
+                {
+                    setupAction.InvalidModelStateResponseFactory = context =>
+                    {
+                        var problemDetailsFactory =
+                            context.HttpContext.RequestServices.GetRequiredService<ProblemDetailsFactory>();
+                        var problemDetails =
+                            problemDetailsFactory.CreateValidationProblemDetails(context.HttpContext,
+                                context.ModelState);
+
+                        problemDetails.Detail = "See the error field for more information";
+                        problemDetails.Instance = context.HttpContext.Request.Path;
+
+                        //find out which status code to use
+                        var actionExecutingContext = 
+                            context as Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext;
+
+                        // if there are modelState errors & all arguments were correctly found
+                        // or parsed. we're dealing with validation errors 
+                        if (context.ModelState.ErrorCount > 0 &&
+                            actionExecutingContext?.ActionArguments.Count ==
+                            context.ActionDescriptor.Parameters.Count)
+                        {
+                            problemDetails.Type = "https://courselibrary.com/modelvalidationproblem";
+                            problemDetails.Status = StatusCodes.Status422UnprocessableEntity;
+                            problemDetails.Title = "One or more validation errors occured.";
+
+                            return new UnprocessableEntityObjectResult(problemDetails)
+                            {
+                                ContentTypes = {"application/problem+json"}
+                            };
+                        }
+
+                        // if one of the arguments wasn't correctly found / couldn't be parsed
+                        // we're dealing with null/unparseable input
+                        problemDetails.Status = StatusCodes.Status400BadRequest;
+                        problemDetails.Title = "One or more errors on input occured";
+                        return  new BadRequestObjectResult(problemDetails)
+                        {
+                            ContentTypes = {"application/problem+json" }
+                        };
+                    };
+                });
+            services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
              
             services.AddScoped<ICourseLibraryRepository, CourseLibraryRepository>();
 
@@ -31,12 +81,17 @@ namespace CourseLibraryApi
             {
                 options.UseSqlServer(
                     @"Server=(localdb)\mssqllocaldb;Database=CourseLibraryDB;Trusted_Connection=True;");
-            }); 
+            });
+            services.AddSwaggerGen();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
+            app.UseSwagger();
+
+            app.UseSwaggerUI(c => { c.SwaggerEndpoint("/swagger/v1/swagger.json", "CourseLibrary API V1"); });
+
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
