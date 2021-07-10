@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using CourseLibrary.API.DbContexts;
+using CourseLibraryApi.DbContexts;
 using CourseLibraryApi.Entities;
+using CourseLibraryApi.ResourceParameters;
 
 namespace CourseLibraryApi.Services
 {
@@ -48,8 +49,7 @@ namespace CourseLibraryApi.Services
                 throw new ArgumentNullException(nameof(courseId));
             }
 
-            return _context.Courses
-              .Where(c => c.AuthorId == authorId && c.Id == courseId).FirstOrDefault();
+            return _context.Courses.FirstOrDefault(c => c.AuthorId == authorId && c.Id == courseId);
         }
 
         public IEnumerable<Course> GetCourses(Guid authorId)
@@ -119,7 +119,38 @@ namespace CourseLibraryApi.Services
 
         public IEnumerable<Author> GetAuthors()
         {
-            return _context.Authors.ToList<Author>();
+            return _context.Authors.ToList();
+        }
+
+        public IEnumerable<Author> GetAuthors(AuthorsResourceParameters authorsResourceParameters)
+        {
+            if (authorsResourceParameters == null)
+            {
+                throw new ArgumentNullException(nameof(authorsResourceParameters));
+            }
+
+            if (string.IsNullOrWhiteSpace(authorsResourceParameters.SearchTerm) && string.IsNullOrWhiteSpace(
+                authorsResourceParameters.MainCategory))
+            {
+                return GetAuthors();
+            }
+
+            var collection = _context.Authors as IQueryable<Author>;
+            if (!string.IsNullOrWhiteSpace(authorsResourceParameters.MainCategory))
+            {
+                var mainCategory = authorsResourceParameters.MainCategory.Trim();
+                collection = collection.Where(a => a.MainCategory == mainCategory);
+            }
+
+            if (!string.IsNullOrWhiteSpace(authorsResourceParameters.SearchTerm))
+            {
+                var searchTerm = authorsResourceParameters.SearchTerm.Trim();
+                collection = collection.Where(a =>
+                    a.MainCategory.Contains(searchTerm) || a.FirstName.Contains(searchTerm) ||
+                    a.LastName.Contains(searchTerm));
+            }
+
+            return collection.ToList();
         }
          
         public IEnumerable<Author> GetAuthors(IEnumerable<Guid> authorIds)
@@ -131,7 +162,7 @@ namespace CourseLibraryApi.Services
 
             return _context.Authors.Where(a => authorIds.Contains(a.Id))
                 .OrderBy(a => a.FirstName)
-                .OrderBy(a => a.LastName)
+                .ThenBy(a => a.LastName)
                 .ToList();
         }
 

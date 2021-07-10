@@ -1,5 +1,5 @@
 using System;
-using CourseLibrary.API.DbContexts;
+using CourseLibraryApi.DbContexts;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
