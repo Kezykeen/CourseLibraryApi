@@ -4,7 +4,12 @@ using AutoMapper;
 using CourseLibraryApi.Entities;
 using CourseLibraryApi.Models;
 using CourseLibraryApi.Services;
+using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace CourseLibraryApi.Controllers
 {
@@ -70,6 +75,62 @@ namespace CourseLibraryApi.Controllers
 
             return CreatedAtRoute("GetCourse", new {authorId, courseId = entityToCreate.Id},
                 _mapper.Map<CourseDto>(entityToCreate));
+        }
+
+        [HttpPatch("{courseId}")]
+        public IActionResult UpdateCourseForAuthor(Guid authorId, Guid courseId, [FromBody] JsonPatchDocument<CourseForUpdateDto> patchDocument)
+        {
+            if (!_courseLibraryRepository.AuthorExists(authorId))
+            {
+                return NotFound();
+            }
+
+            var courseForAuthorFromDb = _courseLibraryRepository.GetCourse(authorId, courseId);
+            if (courseForAuthorFromDb == null)
+            {
+                return NotFound();
+            }
+
+            var courseToPatch = _mapper.Map<CourseForUpdateDto>(courseForAuthorFromDb);
+            
+            patchDocument.ApplyTo(courseToPatch, ModelState);
+            if (!TryValidateModel(courseToPatch))
+            {
+               return ValidationProblem(ModelState);
+            }
+
+            _mapper.Map(courseToPatch, courseForAuthorFromDb);
+            _courseLibraryRepository.UpdateCourse(courseForAuthorFromDb);
+            _courseLibraryRepository.Save();
+
+            return NoContent();
+        }
+
+        [HttpDelete("{courseId}")]
+        public ActionResult DeleteCourse(Guid authorId, Guid courseId)
+        {
+            if (!_courseLibraryRepository.AuthorExists(authorId))
+            {
+                return NotFound();
+            }
+
+            var course = _courseLibraryRepository.GetCourse(authorId, courseId);
+            if (course == null)
+            {
+                return NotFound();
+            }
+
+            _courseLibraryRepository.DeleteCourse(course);
+            _courseLibraryRepository.Save();
+
+            return NoContent();
+        } 
+
+        public override ActionResult ValidationProblem([ActionResultObjectValue] ModelStateDictionary modelStateDictionary)
+        {
+            var options = HttpContext.RequestServices.GetRequiredService<IOptions<ApiBehaviorOptions>>();
+
+            return (ActionResult)options.Value.InvalidModelStateResponseFactory(ControllerContext);
         }
     }
 }
