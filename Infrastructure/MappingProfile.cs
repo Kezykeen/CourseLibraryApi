@@ -20,6 +20,8 @@ namespace CourseLibraryApi.Infrastructure
             CreateMap<Course, CourseDto>().ReverseMap();
 
             CreateMap<CourseForCreationDto, Course>();
+
+            CreateMap<CourseForUpdateDto, Course>().ReverseMap();
         }
     }
 }
