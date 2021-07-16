@@ -17,6 +17,8 @@ namespace CourseLibraryApi.Infrastructure
 
             CreateMap<AuthorForCreationDto, Author>();
 
+            CreateMap<Author, AuthorFullDto>();
+
             CreateMap<Course, CourseDto>().ReverseMap();
 
             CreateMap<CourseForCreationDto, Course>();
