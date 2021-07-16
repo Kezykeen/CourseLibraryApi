@@ -1,10 +1,12 @@
 using System;
+using System.Linq;
 using CourseLibraryApi.DbContexts;
 using CourseLibraryApi.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Formatters;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -26,8 +28,19 @@ namespace CourseLibraryApi
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddHttpCacheHeaders();
+
+            services.AddResponseCaching();
+
             services.AddControllers(
-                    setupAction => setupAction.ReturnHttpNotAcceptable = true)
+                    setupAction =>
+                    {
+                        setupAction.ReturnHttpNotAcceptable = true;
+                        setupAction.CacheProfiles.Add("240SecondsCacheProfile", new CacheProfile
+                        {
+                            Duration = 240
+                        });
+                    })
                 .AddNewtonsoftJson(setupAction=> setupAction.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver())
                 .AddXmlDataContractSerializerFormatters()
                 .ConfigureApiBehaviorOptions(setupAction =>
@@ -73,6 +86,18 @@ namespace CourseLibraryApi
                         };
                     };
                 });
+
+            services.Configure<MvcOptions>(config =>
+                {
+                    var newtonsoftJsonOutputFormatter = config.OutputFormatters.OfType<NewtonsoftJsonOutputFormatter>()?.FirstOrDefault();
+
+                    newtonsoftJsonOutputFormatter?.SupportedMediaTypes.Add("application/vnd.marvin.hateoas+json");
+                });
+
+            services.AddTransient<IPropertyMappingService, PropertyMappingService>();
+
+            services.AddTransient<IPropertyCheckerService, PropertyCheckerService>();
+
             services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
              
             services.AddScoped<ICourseLibraryRepository, CourseLibraryRepository>();
@@ -96,6 +121,10 @@ namespace CourseLibraryApi
             {
                 app.UseDeveloperExceptionPage();
             }
+
+            app.UseResponseCaching();
+
+            app.UseHttpCacheHeaders();
 
             app.UseRouting();
 

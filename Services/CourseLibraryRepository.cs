@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using CourseLibraryApi.DbContexts;
 using CourseLibraryApi.Entities;
+using CourseLibraryApi.Helpers;
+using CourseLibraryApi.Models;
 using CourseLibraryApi.ResourceParameters;
 
 namespace CourseLibraryApi.Services
@@ -10,10 +12,12 @@ namespace CourseLibraryApi.Services
     public class CourseLibraryRepository : ICourseLibraryRepository, IDisposable
     {
         private readonly CourseLibraryContext _context;
+        private readonly IPropertyMappingService _propertyMappingService;
 
-        public CourseLibraryRepository(CourseLibraryContext context )
+        public CourseLibraryRepository(CourseLibraryContext context, IPropertyMappingService propertyMappingService )
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
+            _propertyMappingService = propertyMappingService;
         }
 
         public void AddCourse(Guid authorId, Course course)
@@ -117,22 +121,11 @@ namespace CourseLibraryApi.Services
             return _context.Authors.FirstOrDefault(a => a.Id == authorId);
         }
 
-        public IEnumerable<Author> GetAuthors()
-        {
-            return _context.Authors.ToList();
-        }
-
-        public IEnumerable<Author> GetAuthors(AuthorsResourceParameters authorsResourceParameters)
+        public PagedList<Author> GetAuthors(AuthorsResourceParameters authorsResourceParameters)
         {
             if (authorsResourceParameters == null)
             {
                 throw new ArgumentNullException(nameof(authorsResourceParameters));
-            }
-
-            if (string.IsNullOrWhiteSpace(authorsResourceParameters.SearchTerm) && string.IsNullOrWhiteSpace(
-                authorsResourceParameters.MainCategory))
-            {
-                return GetAuthors();
             }
 
             var collection = _context.Authors as IQueryable<Author>;
@@ -150,7 +143,18 @@ namespace CourseLibraryApi.Services
                     a.LastName.Contains(searchTerm));
             }
 
-            return collection.ToList();
+            if (!string.IsNullOrWhiteSpace(authorsResourceParameters.OrderBy))
+            {
+                // get property mapping dictionary
+                var authorPropertyMappingDictionary =
+                    _propertyMappingService.GetPropertyMapping<AuthorDto, Author>();
+
+                collection = collection.ApplySort(authorsResourceParameters.OrderBy, authorPropertyMappingDictionary);
+            }
+
+            return PagedList<Author>.Create(collection,
+                authorsResourceParameters.PageNumber, 
+                authorsResourceParameters.PageSize);
         }
          
         public IEnumerable<Author> GetAuthors(IEnumerable<Guid> authorIds)
@@ -173,7 +177,7 @@ namespace CourseLibraryApi.Services
 
         public bool Save()
         {
-            return (_context.SaveChanges() >= 0);
+            return _context.SaveChanges() >= 0;
         }
 
         public void Dispose()
