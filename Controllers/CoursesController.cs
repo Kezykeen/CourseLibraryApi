@@ -4,6 +4,7 @@ using AutoMapper;
 using CourseLibraryApi.Entities;
 using CourseLibraryApi.Models;
 using CourseLibraryApi.Services;
+using Marvin.Cache.Headers;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
@@ -27,7 +28,7 @@ namespace CourseLibraryApi.Controllers
             _mapper = mapper;
         }
 
-        [HttpGet]
+        [HttpGet("", Name = "GetCoursesForAuthor")]
         public ActionResult<IEnumerable<CourseDto>> GetCourses(Guid authorId)
         {
             if (!_courseLibraryRepository.AuthorExists(authorId))
@@ -39,6 +40,8 @@ namespace CourseLibraryApi.Controllers
         }
 
         [HttpGet("{courseId}", Name = "GetCourse")]
+        [HttpCacheExpiration(CacheLocation = CacheLocation.Public, MaxAge = 1200)]
+        [HttpCacheValidation(MustRevalidate = true)]
         public ActionResult<CourseDto> GetCourse(Guid authorId, Guid courseId)
         {
             if (!_courseLibraryRepository.AuthorExists(authorId))
@@ -55,7 +58,7 @@ namespace CourseLibraryApi.Controllers
             return Ok(_mapper.Map<CourseDto>(course));
         }
 
-        [HttpPost]
+        [HttpPost("", Name = "CreateCourseForAuthor")]
         public ActionResult<CourseDto> CreateCourse(Guid authorId, CourseForCreationDto courseDto)
         {
             if (!_courseLibraryRepository.AuthorExists(authorId))
